@@ -3,14 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>카카오맵 장소 검색 서비스</title>
+  <title>고양국제고 근처 꽃집 찾기 서비스</title>
 
-  <!-- 1. 카카오 지도 SDK 불러오기 (libraries=services 포함: 장소 검색용) -->
-  <!-- appkey에 발급받은 JavaScript 키를 넣습니다. -->
+  <!-- 카카오 지도 SDK (libraries=services 검색 기능 포함) -->
   <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=69bdb7df46392d5e095c89aafdd696f8&libraries=services"></script>
 
   <style>
-    /* 2. 화면 전체 초기화 및 2분할 레이아웃 설정 */
+    /* 화면 전체 초기화 */
     * {
       box-sizing: border-box;
       margin: 0;
@@ -23,16 +22,16 @@
       font-family: 'Noto Sans KR', sans-serif;
     }
 
-    /* 플렉스박스를 이용한 좌/우 2분할 구조 */
+    /* 플렉스박스 2분할 레이아웃 */
     .container {
       display: flex;
       width: 100vw;
       height: 100vh;
     }
 
-    /* 왼쪽: 검색 영역 (너비 350px) */
+    /* 왼쪽 사이드바 (너비 360px) */
     .sidebar {
-      width: 350px;
+      width: 360px;
       height: 100%;
       background-color: #f8f9fa;
       border-right: 1px solid #dee2e6;
@@ -40,6 +39,39 @@
       flex-direction: column;
       padding: 16px;
       z-index: 10;
+    }
+
+    /* 서비스 타이틀 */
+    .service-title {
+      font-size: 18px;
+      font-weight: bold;
+      color: #2b303a;
+      margin-bottom: 12px;
+    }
+
+    /* 탭 버튼 영역 */
+    .tab-container {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ced4da;
+      background-color: #ffffff;
+      color: #495057;
+      border-radius: 6px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab-btn.active {
+      background: linear-gradient(135deg, #ff4e50, #11998e);
+      color: #ffffff;
+      border-color: transparent;
     }
 
     /* 검색창 박스 */
@@ -60,15 +92,11 @@
 
     .search-box button {
       padding: 10px 16px;
-      background-color: #fee500; /* 카카오 시그니처 Yellow */
+      background-color: #fee500;
       border: none;
       border-radius: 4px;
       font-weight: bold;
       cursor: pointer;
-    }
-
-    .search-box button:hover {
-      background-color: #fada0a;
     }
 
     /* 검색 결과 리스트 목록 */
@@ -82,28 +110,28 @@
       padding: 12px;
       border-bottom: 1px solid #e9ecef;
       background-color: #ffffff;
-      border-radius: 4px;
+      border-radius: 6px;
       margin-bottom: 8px;
       cursor: pointer;
       transition: background-color 0.2s;
     }
 
     .result-item:hover {
-      background-color: #e9ecef;
+      background-color: #e8f5e9;
     }
 
     .result-item h4 {
       font-size: 15px;
-      color: #333;
+      color: #2d3748;
       margin-bottom: 4px;
     }
 
     .result-item p {
       font-size: 12px;
-      color: #666;
+      color: #718096;
     }
 
-    /* 오른쪽: 지도 영역 (남은 공간 모두 차지) */
+    /* 오른쪽 지도 영역 */
     .map-container {
       flex: 1;
       height: 100%;
@@ -112,129 +140,198 @@
 </head>
 <body>
 
-  <!-- 화면 레이아웃 컨테이너 -->
   <div class="container">
-    <!-- 왼쪽 사이드바 (검색창 + 결과 리스트) -->
+    <!-- 왼쪽 사이드바 -->
     <div class="sidebar">
-      <div class="search-box">
-        <input type="text" id="keywordInput" placeholder="장소를 입력하세요 (예: 강남역)" onkeydown="if(event.key==='Enter') searchPlaces()">
-        <button onclick="searchPlaces()">검색</button>
+      <div class="service-title">🌷 고양국제고 꽃집 찾기</div>
+      
+      <!-- 탭 버튼 영역 -->
+      <div class="tab-container">
+        <button id="tab1" class="tab-btn active" onclick="selectTab('꽃집')">🌸 추천 꽃집</button>
+        <button id="tab2" class="tab-btn" onclick="selectTab('플라워클래스')">🌿 플라워 공방</button>
       </div>
-      <ul id="resultList" class="result-list">
-        <!-- 검색 결과가 여기에 동적으로 들어옵니다 -->
-      </ul>
+
+      <!-- 검색창 -->
+      <div class="search-box">
+        <input type="text" id="keywordInput" placeholder="직접 장소 검색" onkeydown="if(event.key==='Enter') searchPlacesByKeyword()">
+        <button onclick="searchPlacesByKeyword()">검색</button>
+      </div>
+
+      <!-- 결과 목록 -->
+      <ul id="resultList" class="result-list"></ul>
     </div>
 
     <!-- 오른쪽 지도 영역 -->
     <div id="map" class="map-container"></div>
   </div>
 
-  <!-- JavaScript 구현 -->
   <script>
-    // 카카오맵 및 검색 서비스 변수 선언
     let map = null;
     let placeSearchService = null;
-    let markers = []; // 생성된 마커들을 보관하는 배열
+    let markers = []; 
+    let currentMarker = null; // 내 현재 위치 마커 보관
+    let currentInfoWindow = null;
+    let centerPosition = null; // 고양국제고 및 사용자 위치 기억
 
-    // 지도가 안전하게 로드된 후 초기화 실행 (sdk 로딩 오류 방지)
+    // 고양국제고등학교 좌표 (위도, 경도)
+    const GOYANG_HIGH_SCHOOL = new kakao.maps.LatLng(37.689620, 126.820250);
+
+    // 지도가 완전히 로드된 후 실행
     kakao.maps.load(function () {
       initMap();
     });
 
-    // 지도 및 기능 초기화 함수
+    // 지도 초기화 함수
     function initMap() {
       const mapContainer = document.getElementById('map');
       
-      // 기본 초기 옵션 설정 (서울시청 기준, 레벨 5)
       const defaultOptions = {
-        center: new kakao.maps.LatLng(37.566826, 126.9786567),
-        level: 5 // 요구사항: 지도 확대 레벨 5
+        center: GOYANG_HIGH_SCHOOL, // 기본 기준: 고양국제고등학교
+        level: 5 // 확대 레벨 5
       };
 
-      // 지도 객체 생성
       map = new kakao.maps.Map(mapContainer, defaultOptions);
-
-      // 장소 검색 객체 생성
       placeSearchService = new kakao.maps.services.Places();
+      centerPosition = GOYANG_HIGH_SCHOOL;
 
-      // 현재 위치 가져오기 (Geolocation)
+      // 사용자 현재 위치 파악
       getCurrentLocation();
+
+      // 기본으로 1번 탭(꽃집) 검색 실행
+      searchCategory('꽃집');
     }
 
-    // 브라우저의 Geolocation API를 사용하여 현재 위치 수신
+    // 빨간색-초록색 그라데이션 하트 모양 커스텀 마커 이미지 생성
+    function createHeartMarkerImage() {
+      const svgString = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24">
+          <defs>
+            <linearGradient id="redGreenGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#ff4e50" />
+              <stop offset="100%" stop-color="#11998e" />
+            </linearGradient>
+          </defs>
+          <path fill="url(#redGreenGrad)" stroke="#ffffff" stroke-width="1.5" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+        </svg>`;
+
+      const imageSrc = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgString);
+      const imageSize = new kakao.maps.Size(36, 36);
+      const imageOption = { offset: new kakao.maps.Point(18, 36) };
+
+      return new kakao.maps.MarkerImage(imageSrc, imageSize, imageOption);
+    }
+
+    // 파란색 원 모양 현재 위치 마커 이미지 생성
+    function createBlueCircleMarkerImage() {
+      const svgString = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9" fill="#007bff" stroke="#ffffff" stroke-width="3"/>
+          <circle cx="12" cy="12" r="4" fill="#ffffff"/>
+        </svg>`;
+
+      const imageSrc = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgString);
+      const imageSize = new kakao.maps.Size(28, 28);
+      const imageOption = { offset: new kakao.maps.Point(14, 14) };
+
+      return new kakao.maps.MarkerImage(imageSrc, imageSize, imageOption);
+    }
+
+    // 사용자 현재 위치 확인 및 파란색 원 마커 표시
     function getCurrentLocation() {
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           function (position) {
-            const lat = position.coords.latitude;  // 위도
-            const lng = position.coords.longitude; // 경도
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            centerPosition = new kakao.maps.LatLng(lat, lng);
+            map.setCenter(centerPosition);
 
-            const currentPosition = new kakao.maps.LatLng(lat, lng);
+            // 기존 현재 위치 마커 제거
+            if (currentMarker) {
+              currentMarker.setMap(null);
+            }
 
-            // 지도의 중심을 현재 위치로 이동
-            map.setCenter(currentPosition);
-
-            // 현재 위치에 마커 표시
-            const currentMarker = new kakao.maps.Marker({
-              position: currentPosition,
-              map: map
+            // 파란색 원 모양 마커로 현재 위치 표시
+            currentMarker = new kakao.maps.Marker({
+              position: centerPosition,
+              map: map,
+              image: createBlueCircleMarkerImage(),
+              zIndex: 10
             });
 
-            // 현재 위치 안내 인포윈도우
-            const infowindow = new kakao.maps.InfoWindow({
-              content: '<div style="padding:5px;font-size:12px;color:#333;">📍 현재 위치</div>'
-            });
-            infowindow.open(map, currentMarker);
+            // 위치 확인 후 현재 선택된 탭으로 재검색
+            const activeTab = document.querySelector('.tab-btn.active');
+            if (activeTab.id === 'tab1') searchCategory('꽃집');
+            else searchCategory('플라워클래스');
           },
           function (error) {
-            console.warn('위치 권한을 거부했거나 위치 정보를 가져올 수 없습니다.', error);
+            console.warn('위치 권한을 가져올 수 없어 고양국제고등학교를 중심으로 표시합니다.', error);
           }
         );
-      } else {
-        alert('이 브라우저에서는 위치 서비스(Geolocation)를 지원하지 않습니다.');
       }
     }
 
-    // 키워드로 장소 검색
-    function searchPlaces() {
+    // 탭 클릭 이벤트 관리
+    function selectTab(categoryKeyword) {
+      document.getElementById('tab1').classList.toggle('active', categoryKeyword === '꽃집');
+      document.getElementById('tab2').classList.toggle('active', categoryKeyword === '플라워클래스');
+
+      document.getElementById('keywordInput').value = ''; // 검색창 초기화
+      searchCategory(categoryKeyword);
+    }
+
+    // 카테고리/내 위치 주변 장소 검색
+    function searchCategory(keyword) {
+      clearMarkersAndList();
+
+      const searchOptions = {
+        location: centerPosition,
+        radius: 3000 // 중심점으로부터 3km 이내 검색
+      };
+
+      placeSearchService.keywordSearch(keyword, placesSearchCallback, searchOptions);
+    }
+
+    // 직접 검색창 키워드 검색
+    function searchPlacesByKeyword() {
       const keyword = document.getElementById('keywordInput').value.trim();
 
       if (!keyword) {
-        alert('검색어를 입력해주세요!');
+        alert('검색어를 입력해 주세요!');
         return;
       }
 
-      // 카카오 장소 검색 API 호출
+      clearMarkersAndList();
       placeSearchService.keywordSearch(keyword, placesSearchCallback);
     }
 
-    // 장소 검색 완료 시 실행되는 콜백 함수
-    function placesSearchCallback(data, status, pagination) {
+    // 장소 검색 완료 시 콜백
+    function placesSearchCallback(data, status) {
       if (status === kakao.maps.services.Status.OK) {
-        // 기존 마커 및 목록 삭제
-        clearMarkers();
-        
         const listElement = document.getElementById('resultList');
-        listElement.innerHTML = '';
-
         const bounds = new kakao.maps.LatLngBounds();
+        const customMarkerImage = createHeartMarkerImage();
 
-        // 검색 결과 반복 처리
         for (let i = 0; i < data.length; i++) {
           const place = data[i];
           const placePosition = new kakao.maps.LatLng(place.y, place.x);
 
-          // 1. 지도에 마커 추가
+          // 1. 빨간-초록 그라데이션 하트 마커 생성
           const marker = new kakao.maps.Marker({
             position: placePosition,
-            map: map
+            map: map,
+            image: customMarkerImage
           });
           markers.push(marker);
 
-          // 2. 바운드(화면 영역)에 위치 추가
+          // 마커 클릭 시 정보 팝업(인포윈도우) 표시
+          kakao.maps.event.addListener(marker, 'click', function () {
+            displayInfoWindow(marker, place);
+          });
+
           bounds.extend(placePosition);
 
-          // 3. 왼쪽 리스트에 HTML 요소 추가
+          // 2. 왼쪽 목록에 리스트 항목 생성
           const itemElement = document.createElement('li');
           itemElement.className = 'result-item';
           itemElement.innerHTML = `
@@ -242,30 +339,64 @@
             <p>${place.road_address_name || place.address_name}</p>
           `;
 
-          // 리스트 항목 클릭 시 해당 위치로 이동 및 화면 확대
+          // 리스트 클릭 시 위치 이동 및 팝업 열기
           itemElement.onclick = function () {
             map.panTo(placePosition);
+            displayInfoWindow(marker, place);
           };
 
           listElement.appendChild(itemElement);
         }
 
-        // 검색된 장소들이 모두 보이도록 지도 범위 조정
+        // 현재 위치 마커가 있다면 바운드에 함께 추가
+        if (currentMarker) {
+          bounds.extend(centerPosition);
+        }
+
+        // 검색된 장소들이 한눈에 보이도록 지도 범위 조정
         map.setBounds(bounds);
 
       } else if (status === kakao.maps.services.Status.ZERO_RESULT) {
         alert('검색 결과가 존재하지 않습니다.');
       } else if (status === kakao.maps.services.Status.ERROR) {
-        alert('검색 중 오류가 발생했습니다.');
+        alert('장소 검색 중 오류가 발생했습니다.');
       }
     }
 
-    // 이전 마커 제거 함수
-    function clearMarkers() {
+    // 마커 클릭 시 팝업(인포윈도우) 띄우기
+    function displayInfoWindow(marker, place) {
+      if (currentInfoWindow) {
+        currentInfoWindow.close();
+      }
+
+      const content = `
+        <div style="padding:10px; font-size:12px; width:200px; line-height:1.4;">
+          <strong style="font-size:14px; color:#11998e;">${place.place_name}</strong><br>
+          <span style="color:#666; font-size:11px;">${place.road_address_name || place.address_name}</span><br>
+          ${place.phone ? `<span style="color:#888;">📞 ${place.phone}</span>` : ''}
+        </div>
+      `;
+
+      currentInfoWindow = new kakao.maps.InfoWindow({
+        content: content,
+        removable: true
+      });
+
+      currentInfoWindow.open(map, marker);
+    }
+
+    // 기존 검색 마커와 리스트 초기화 (현재 위치 마커는 유지)
+    function clearMarkersAndList() {
       for (let i = 0; i < markers.length; i++) {
         markers[i].setMap(null);
       }
       markers = [];
+
+      if (currentInfoWindow) {
+        currentInfoWindow.close();
+      }
+
+      document.getElementById('resultList').innerHTML = '';
     }
   </script>
 </body>
